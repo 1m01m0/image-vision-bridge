@@ -1,65 +1,68 @@
 # Image Vision Bridge
 
-> 让纯文本大模型（DeepSeek 等）也能“看见”图片的 Agent Skill。
-> 遵循 [Anthropic Agent Skills 规范](https://agentskills.io/specification)（frontmatter + SKILL.md + scripts/references）。
+[中文](README.zh.md)
 
-DeepSeek 等纯文本模型无法直接读取图片。本 skill 用**双轨方案**把图片内容转换成模型可处理的文本：
+**Image Vision Bridge** is an [Agent Skill](https://agentskills.io/specification) that gives text-only LLMs (DeepSeek, etc.) the ability to "see" images.
 
-1. **本地引擎（默认，零依赖、免费、隐私）**——macOS Vision 多语言 OCR、二维码/条形码解码、人脸检测、场景分类、主色调与元数据提取。
-2. **第三方多模态模型（可选，按需）**——通过 OpenAI 兼容接口接入 GLM-4V / Qwen-VL / GPT-4o / DeepSeek-VL2 等视觉大模型，真正“看懂”照片、复杂图表、手绘草图的语义。
+DeepSeek and most text-only models cannot ingest images directly. This skill bridges the gap with a two-tier pipeline that turns image content into text the model can reason about:
 
-## 结构
+1. **Local engines (default — free, private, zero-dependency)** — macOS Vision multilingual OCR, QR/barcode decoding, face detection, scene classification, dominant colors, and metadata extraction. Nothing leaves your machine.
+2. **Third-party multimodal models (optional, on demand)** — an OpenAI-compatible vision API (GLM-4V, Qwen-VL, GPT-4o, DeepSeek-VL2, ...) for real semantic understanding of photos, complex diagrams, and sketches.
 
-```
+## Structure
+
+```text
 image-vision-bridge/
-├── SKILL.md           # 元数据（frontmatter）+ 模型指令
+├── SKILL.md               # Metadata + model instructions
 ├── scripts/
-│   ├── ocr.sh             # OCR 主入口（Vision → tesseract 回退）
-│   ├── vision-ocr.jxa     # macOS Vision 多语言 OCR（JXA，无编译依赖）
-│   ├── vision-detect.jxa  # 二维码/条形码/人脸/场景分类
-│   ├── image-info.sh      # 尺寸/格式/主色调/亮度
-│   ├── clipboard-image.sh # 把剪贴板图片存为 PNG
-│   └── vision-api.sh      # OpenAI 兼容视觉 API 兜底
+│   ├── ocr.sh             # OCR entry point (Vision → tesseract fallback)
+│   ├── vision-ocr.jxa     # macOS Vision multilingual OCR (JXA, no compilation)
+│   ├── vision-detect.jxa  # QR/barcodes, faces, scene classification
+│   ├── image-info.sh      # Dimensions, format, dominant colors, brightness
+│   ├── clipboard-image.sh # Save the clipboard image to PNG
+│   └── vision-api.sh      # OpenAI-compatible vision API fallback
 └── references/
-    └── engine-notes.md    # 引擎细节、供应商与排障
+    └── engine-notes.md    # Engine details, providers, troubleshooting
 ```
 
-## 安装
+## Install
 
-**Claude Code / Codex / OpenCode 等支持 Agent Skills 的工具**：
+### Claude Code / Codex / OpenCode (Agent Skills)
 
-```bash
-# 方式一（推荐）：npx skills
+```sh
+# Option 1 (recommended): npx skills
 npx skills add 1m01m0/image-vision-bridge
 
-# 方式二：手动安装到用户级 skills 目录
+# Option 2: manual
 git clone https://github.com/1m01m0/image-vision-bridge ~/.claude/skills/image-vision-bridge
 ```
 
-**DeepSeek Harness（DSH）**：DSH 自动扫描 `~/.agents/skills/` 与 `~/.dsh/skills/`（热刷新，无需重启）：
+### DeepSeek Harness (dsh)
 
-```bash
+`dsh` auto-discovers skills under `~/.agents/skills/` and `~/.dsh/skills/` (hot-reloaded, no restart needed):
+
+```sh
 git clone https://github.com/1m01m0/image-vision-bridge ~/.agents/skills/image-vision-bridge
 ```
 
-## 视觉 API 配置（可选，用于“看图说话”）
+## Optional: vision API configuration
 
-本地引擎免费且不上传数据；需要语义级理解（照片、复杂图表）时，配置一个 OpenAI 兼容的视觉模型：
+Local engines are free and fully on-device. For semantic-level understanding (photos, complex diagrams), configure any OpenAI-compatible vision model:
 
-```bash
-# 创建 ~/.dsh/vision.env（权限 600），填写：
-DSH_VISION_API_KEY=sk-你的密钥
-DSH_VISION_API_BASE=https://open.bigmodel.cn/api/paas/v4   # 智谱 GLM（glm-4v-flash 免费）
+```sh
+# ~/.dsh/vision.env (chmod 600)
+DSH_VISION_API_KEY=sk-your-key
+DSH_VISION_API_BASE=https://open.bigmodel.cn/api/paas/v4   # Zhipu GLM (glm-4v-flash is free)
 DSH_VISION_MODEL=glm-4v-flash
 ```
 
-常用供应商：智谱 GLM（免费）、阿里百炼 Qwen-VL、硅基流动 DeepSeek-VL2、Moonshot、OpenAI、OpenRouter（详见 `references/engine-notes.md`）。
+Providers: Zhipu GLM (free tier), Alibaba Qwen, SiliconFlow DeepSeek-VL2, Moonshot, OpenAI, OpenRouter — see `references/engine-notes.md` for details.
 
-## 隐私
+## Privacy
 
-- 本地引擎（OCR/检测/分类/颜色）全部在本机运行，不上传任何数据。
-- 仅调用视觉 API 时图片会发送给第三方服务——skill 会先征得用户同意。
+- Local engines (OCR / detection / classification / colors) run entirely on-device; no data leaves your machine.
+- Calling the vision API sends the image to a third party — the skill asks for your consent first.
 
 ## License
 
-MIT
+[MIT](LICENSE)
