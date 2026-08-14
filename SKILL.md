@@ -25,10 +25,11 @@ DeepSeek 等纯文本模型无法直接读取图片。本 skill 用**双轨方�
 
 | 脚本 | 作用 |
 | --- | --- |
-| `ocr.sh` | 主入口：把图片归一化为 PNG 后先用 macOS Vision 做多语言 OCR（默认 zh-Hans,en-US），失败时回退 tesseract。输出每行文字 + 置信度 + 归一化坐标框。 |
+| `ocr.sh` | 主入口：把图片归一化为 PNG 后先用 macOS Vision 做多语言 OCR（默认 zh-Hans,en-US），失败时回退 tesseract。输出每行文字 + 归一化坐标框。 |
 | `vision-detect.jxa` | QR/条形码（含 payload）、人脸数量、场景分类（top5）。 |
 | `image-info.sh` | 尺寸/格式/DPI/色彩空间/文件大小 + 主色调 + 平均亮度。 |
-| `clipboard-image.sh` | 把剪贴板里的图片存成 PNG（用户“粘贴截图”时用）。 |
+| `clipboard-image.sh` | 把剪贴板里的图片存成 PNG（用户“复制图片/截图”后，在对话里说“帮我看这张图”即可）。 |
+| `upload-server.py` | 本地拖拽上传页（`python3 upload-server.py [port] [outdir]`，浏览器打开 http://127.0.0.1:8765/ 粘贴/拖入图片，保存后返回路径）。GUI 拒绝附件时的备用入口。 |
 | `vision-api.sh` | OpenAI 兼容视觉 API 兜底（需用户提供 `DSH_VISION_API_KEY` 等环境变量）。 |
 
 ## Workflow
@@ -37,7 +38,7 @@ DeepSeek 等纯文本模型无法直接读取图片。本 skill 用**双轨方�
    - 本地路径：直接用。
    - 对话附件：先找到文件实际路径（检查工作区/附件目录，必要时用 glob）。
    - URL：`curl -L -o /tmp/img.jpg "<url>"` 下载。
-   - 剪贴板粘贴：`bash "$SKILL_DIR/scripts/clipboard-image.sh" /tmp/pasted.png`。
+   - **GUI 拒绝图片附件时（提示“当前模型不支持图片”属正常，模型本身不吃图片）**：告诉用户复制图片（截图或右键复制）后回来说一声，然后运行 `bash "$SKILL_DIR/scripts/clipboard-image.sh" /tmp/pasted.png` 从剪贴板取图；若剪贴板没有图片，可起 `python3 "$SKILL_DIR/scripts/upload-server.py"` 让用户从浏览器粘贴/拖入，再读取它输出的路径。
    - 若找不到任何图片文件，向用户确认图片来源。
 
 2. **基本信息**：`bash "$SKILL_DIR/scripts/image-info.sh" <image>` → 尺寸、格式、主色调、明暗。
@@ -62,7 +63,7 @@ DeepSeek 等纯文本模型无法直接读取图片。本 skill 用**双轨方�
 
 6. **汇总回答**：
    - 用用户的语言输出；把 OCR 文字原样引用（不要润色/脑补），坐标信息用于描述布局。JXA 桥接无法提供真实置信度，所有识别行均视为已识别文本。
-   - 明确标注每条信息的来源与置信度；低置信度（<0.5）或缺失的部分要说明。
+   - 明确标注每条信息的来源；识别不全或引擎失败（`ERROR:` 开头）的部分如实说明。
    - 图里有文字→先给全文，再给“哪里写了什么”的布局总结。
 
 ## Engine selection
