@@ -1,0 +1,41 @@
+// macOS Vision OCR via JXA — zero-dependency, on-device, multilingual.
+// Usage: osascript -l JavaScript vision-ocr.jxa <image> [languages]
+// Languages default: zh-Hans,en-US (comma separated)
+ObjC.import('Vision');
+ObjC.import('Foundation');
+
+function run(argv) {
+  const path = argv[0] || '';
+  const langs = (argv[1] || 'zh-Hans,en-US').split(',').map(function (s) { return s.trim(); });
+  try {
+    const fm = $.NSFileManager.defaultManager;
+    if (!fm.fileExistsAtPath(path)) return 'ERROR: file not found: ' + path;
+    const url = $.NSURL.fileURLWithPath(path);
+    const handler = $.VNImageRequestHandler.alloc.initWithURLOptions(url, $.NSDictionary.dictionary);
+    if (handler.isNil()) return 'ERROR: cannot open image: ' + path;
+    const req = $.VNRecognizeTextRequest.alloc.init;
+    req.recognitionLevel = $.VNRequestTextRecognitionLevelAccurate;
+    req.usesLanguageCorrection = true;
+    req.recognitionLanguages = $.NSArray.arrayWithArray(langs);
+    const err = Ref();
+    const ok = handler.performRequestsError($.NSArray.arrayWithObject(req), err);
+    if (!ok) return 'ERROR: vision request failed: ' + (err[0] ? err[0].localizedDescription.js : 'unknown');
+    const results = req.results;
+    if (!results || results.count === 0) return '(no text found)';
+    const out = [];
+    for (let i = 0; i < results.count; i++) {
+      const obs = results.objectAtIndex(i);
+      const cand = obs.topCandidates(1).objectAtIndex(0);
+      const bb = obs.boundingBox;
+      const x = Math.round(bb.origin.x * 100);
+      const y = Math.round((1 - bb.origin.y - bb.size.height) * 100);
+      const w = Math.round(bb.size.width * 100);
+      const h = Math.round(bb.size.height * 100);
+      // NOTE: JXA bridge cannot expose Vision's real confidence (always reads 0.5), so it is omitted.
+      out.push('[box ' + x + '%,' + y + ' ' + w + 'x' + h + '] ' + cand.string.js);
+    }
+    return out.join(String.fromCharCode(10));
+  } catch (e) {
+    return 'ERROR: ' + e;
+  }
+}

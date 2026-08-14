@@ -1,0 +1,50 @@
+// macOS Vision detection via JXA — QR/barcode, faces, scene classification.
+// Usage: osascript -l JavaScript vision-detect.jxa <image>
+ObjC.import('Vision');
+ObjC.import('Foundation');
+
+function run(argv) {
+  const path = argv[0] || '';
+  try {
+    const fm = $.NSFileManager.defaultManager;
+    if (!fm.fileExistsAtPath(path)) return 'ERROR: file not found: ' + path;
+    const url = $.NSURL.fileURLWithPath(path);
+    const handler = $.VNImageRequestHandler.alloc.initWithURLOptions(url, $.NSDictionary.dictionary);
+    if (handler.isNil()) return 'ERROR: cannot open image: ' + path;
+    const err = Ref();
+    const out = [];
+    // 1) QR codes / barcodes
+    const bar = $.VNDetectBarcodesRequest.alloc.init;
+    const ok1 = handler.performRequestsError($.NSArray.arrayWithObject(bar), err);
+    if (ok1 && bar.results && bar.results.count > 0) {
+      for (let i = 0; i < bar.results.count; i++) {
+        const o = bar.results.objectAtIndex(i);
+        const sym = (o.symbology.js ? o.symbology.js : String(o.symbology)).replace(/^VNBarcodeSymbology/, '');
+        const payload = o.payloadStringValue ? o.payloadStringValue.js : '(binary payload)';
+        out.push('BARCODE [' + sym + '] ' + payload);
+      }
+    }
+    // 2) faces
+    const face = $.VNDetectFaceRectanglesRequest.alloc.init;
+    const ok2 = handler.performRequestsError($.NSArray.arrayWithObject(face), err);
+    if (ok2 && face.results && face.results.count > 0) {
+      out.push('FACES: ' + face.results.count + ' detected');
+    }
+    // 3) scene classification (top 5, sorted by confidence)
+    const cls = $.VNClassifyImageRequest.alloc.init;
+    const ok3 = handler.performRequestsError($.NSArray.arrayWithObject(cls), err);
+    if (ok3 && cls.results && cls.results.count > 0) {
+      const top = [];
+      const n = Math.min(5, cls.results.count);
+      for (let i = 0; i < n; i++) {
+        const o = cls.results.objectAtIndex(i);
+        const ident = o.identifier.js ? o.identifier.js : String(o.identifier);
+        top.push(ident + '(' + Number(o.confidence).toFixed(2) + ')');
+      }
+      out.push('CLASSIFICATION: ' + top.join(', '));
+    }
+    return out.length ? out.join(String.fromCharCode(10)) : '(no barcodes, faces, or scene classification found)';
+  } catch (e) {
+    return 'ERROR: ' + e;
+  }
+}
