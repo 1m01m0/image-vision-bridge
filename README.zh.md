@@ -1,100 +1,118 @@
 # Image Vision Bridge
 
-[English](README.md) | 中文
+[English](README.md) | 简体中文
 
-**Image Vision Bridge** 是一个 [Agent Skill](https://agentskills.io/specification)，让纯文本大模型（DeepSeek 等）也能“看见”图片。
+一个 Agent Skill 和命令行图像工具箱，将指定图片转为文字信息：OCR、条码内容、人脸数量、场景标签、图像元数据，以及近似主色。局部提取不足时，可选用视觉 API 获取更丰富的描述。
 
-DeepSeek 等纯文本模型无法直接读取图片。本 skill 用**双轨方案**把图片内容转换成模型可处理的文本：
+本地流程主要面向 **macOS**，通过 JXA（JavaScript for Automation）调用 Apple Vision，适合文本模型代理，也适合明确需要 OCR 或结构化图片信息的任务。
 
-1. **本地引擎（默认——免费、隐私、零依赖）**——macOS Vision 多语言 OCR、二维码/条形码解码、人脸检测、场景分类、主色调与元数据提取。全程不出本机。
-2. **第三方多模态模型（可选，按需）**——通过 OpenAI 兼容接口接入 GLM-4V、Qwen-VL、GPT-4o、DeepSeek-VL2 等视觉大模型，真正“看懂”照片、复杂图表和手绘草图。
+## 快速开始：本地处理
 
-## 定位与适用场景
+需要支持相应 Vision API 的 macOS、`osascript`、Bash 和 Python 3。主色分析和首选图片归一化流程需要 Pillow；OCR 归一化可以回退到 macOS 的 `sips`。安装了英文语言数据的 Tesseract 可作为可选 OCR 后备引擎。
 
-这是一个 **Agent Skill / 显式图片工具箱**。它适合在用户明确指定图片来源和处理任务后读取图片；它不是 DeepSeek Harness 的聊天附件路由插件。
+```bash
+git clone https://github.com/1m01m0/image-vision-bridge.git
+cd image-vision-bridge
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install Pillow
 
-| 需求 | 应使用 |
+bash scripts/ocr.sh /absolute/path/to/image.png
+bash scripts/image-info.sh /absolute/path/to/image.png
+osascript -l JavaScript scripts/vision-detect.jxa /absolute/path/to/image.png
+```
+
+上述命令只处理指定的本地图片，不调用视觉 API。OCR 默认语言是简体中文和美式英语，可传入逗号分隔的 Vision 语言名称：
+
+```bash
+bash scripts/ocr.sh /absolute/path/to/image.png 'zh-Hans,en-US'
+```
+
+结果以文本输出。OCR 准确率受分辨率、版式、语言与引擎影响；人脸检测只报告数量，不识别身份；场景标签属于粗粒度分类，不等同于详细语义理解。
+
+## 安装为 Agent Skill
+
+通过 `skills` CLI 安装，需要 Node.js / npm 和网络：
+
+```bash
+npx skills add 1m01m0/image-vision-bridge
+```
+
+也可将克隆目录放入所用代理支持的 Skill 目录，保留 [SKILL.md](SKILL.md) 与脚本的相对位置。例如 Claude Code 可使用 `~/.claude/skills/image-vision-bridge`；其他代理请核对其实际发现路径。
+
+向代理提供确定的文件路径与操作：
+
+```text
+使用 image-vision-bridge 对 /absolute/path/to/receipt.png 做纯本地 OCR，
+提取可见文字，并标记无法确定的字符。
+```
+
+Skill 不应扫描 Downloads、Desktop、工作区、临时目录或附件目录来猜测目标图片。路径不明确时，应请用户提供。
+
+## 工具入口
+
+| 任务 | 命令 |
 | --- | --- |
-| 对明确的本地文件做 OCR、二维码解码、颜色或元数据提取 | **`image-vision-bridge`** |
-| GUI 无法附图，需要用户明确授权读取剪贴板或上传到本机页面 | **`image-vision-bridge`** |
-| 在没有图片路由能力的文本 Agent 中，手动调用视觉 API 分析指定文件 | **`image-vision-bridge`** |
-| 在 DeepSeek Harness 中选择 DeepSeek，并直接从聊天框发送图片 | [`dsh-image-router`](https://github.com/1m01m0/dsh-image-router) |
-| 让 MiniMax-M3 等模型自动看图，再由 DeepSeek 回答 | `dsh-image-router` |
-| 当前模型本身已经支持图片输入 | 通常两者都不需要 |
+| OCR | `bash scripts/ocr.sh IMAGE [LANGUAGES]` |
+| 二维码/条码、人脸数量、场景分类 | `osascript -l JavaScript scripts/vision-detect.jxa IMAGE` |
+| 元数据、主色、亮度 | `bash scripts/image-info.sh IMAGE` |
+| 明确请求后保存当前剪贴板图片 | `bash scripts/clipboard-image.sh /absolute/path/to/output.png` |
+| 可选远程视觉描述 | `bash scripts/vision-api.sh IMAGE [PROMPT] [MAX_TOKENS]` |
+| 实验性本地上传助手 | `python3 scripts/upload-server.py [PORT] [OUTDIR]` |
+
+剪贴板读取必须来自用户明确请求，并依赖 macOS 剪贴板访问。脚本写入给定的输出路径；使用新文件名以保留已有文件。
 
 ### 与 dsh-image-router 的关系
 
-- `dsh-image-router` 是 **Harness 自动编排层**：处理聊天附件，调用配置的视觉模型一次，再把文字描述交给 DeepSeek。
-- `image-vision-bridge` 是 **显式工具层**：处理已知路径、剪贴板或本地上传页中的图片，擅长 OCR、扫码与图片信息提取。
-- 两者可以同时安装，但不要用本 Skill 重新寻找或二次分析已经由 `dsh-image-router` 处理的同一张聊天附件。
-- 如需在 Harness 中调用本 Skill，建议新开一个没有图片附件的会话，明确给出本地文件路径与任务，例如：“仅在本机对 `/path/to/a.png` 做 OCR”。
+[`dsh-image-router`](https://github.com/1m01m0/dsh-image-router) 负责 DeepSeek Harness 的聊天图片附件路由；Image Vision Bridge 负责明确指定路径、剪贴板或手动上传后的图像处理。二者可共存，但代理不应再次寻找或分析已由路由插件处理过的同一附件。
 
-### 不适用与安全边界
+在 Harness 中使用此 Skill 时，优先在不含图片附件的对话中提供本地路径和具体任务。模型原生支持图片时，直接使用附件功能可能就足够。
 
-- 不要为了寻找一张不确定的图片而扫描工作区、下载目录、桌面、临时目录或附件目录。
-- 不要把“最近修改的图片”当作用户所指的图片；路径不明确时应先让用户确认。
-- 不要用它识别真实人物身份、联网反查人物，或绕过视觉服务的安全限制。
-- 调用第三方视觉 API 前应明确告知图片将离开本机，并取得用户对该次发送的同意。
-- 如果只要求本地处理，必须只使用本地 OCR、扫码、分类、颜色和元数据工具。
+## 可选视觉 API
 
-## 目录结构
+`vision-api.sh` 会把图片和提示词发送给配置的第三方服务。**调用前必须说明目标服务，并获得用户对该次传输的同意。** 脚本本身没有确认提示；用户要求纯本地处理时，不应运行它。
 
-```text
-image-vision-bridge/
-├── SKILL.md               # 元数据 + 模型指令
-├── scripts/
-│   ├── ocr.sh             # OCR 主入口（Vision → tesseract 回退）
-│   ├── vision-ocr.jxa     # macOS Vision 多语言 OCR（JXA，免编译）
-│   ├── vision-detect.jxa  # 二维码/条形码、人脸、场景分类
-│   ├── image-info.sh      # 尺寸、格式、主色调、亮度
-│   ├── clipboard-image.sh # 把剪贴板图片存为 PNG
-│   └── vision-api.sh      # OpenAI 兼容视觉 API 兜底
-└── references/
-    └── engine-notes.md    # 引擎细节、供应商与排障
+接口必须兼容 `/chat/completions`，并接受图片 data URL。支持以下配置：
+
+| 变量 | 默认值或含义 |
+| --- | --- |
+| `DSH_VISION_API_KEY` | 必填 API 密钥。 |
+| `DSH_VISION_API_BASE` | `https://api.openai.com/v1`，不要附加 `/chat/completions`。 |
+| `DSH_VISION_MODEL` | `gpt-4o-mini`，应选择服务支持的视觉模型。 |
+| `DSH_VISION_ENV_FILE` | `~/.dsh/vision.env`，可选配置文件路径。 |
+
+默认模型只是脚本中的配置值，不保证服务当前可用或账户拥有访问权限。配置文件会被作为 **Shell 代码执行**，其中的赋值会覆盖已有环境变量。只能使用可信配置文件，应限制权限，且不要提交或共享其内容。
+
+安全配置密钥并获得用户授权后，可运行：
+
+```bash
+bash scripts/vision-api.sh /absolute/path/to/diagram.png \
+  '解释组件与箭头关系，标记无法辨认的标签。' 1024
 ```
 
-## 安装
+脚本将原图转为 base64 后发送，不缩放图片；curl 超时为 120 秒，默认最大输出为 1,024 tokens。还需要 `curl`、`file`、`base64` 和 Python 3。大图或不支持的格式可能超过服务限制；部分服务错误仅显示在文本中，退出码仍可能为 0，应同时检查输出内容。
 
-### Claude Code / Codex / OpenCode（Agent Skills）
+## 实验性上传助手
 
-```sh
-# 方式一（推荐）：npx skills
-npx skills add 1m01m0/image-vision-bridge
+`upload-server.py` 绑定 `127.0.0.1`，默认端口为 8765，默认保存目录为 `/tmp/vision-uploads`。它没有认证和上传大小限制，并直接将收到的字节保存为 `.png` 文件名，不转换实际图片格式。使用后按 Ctrl+C 停止服务，并按需删除上传文件。
 
-# 方式二：手动安装
-git clone https://github.com/1m01m0/image-vision-bridge ~/.claude/skills/image-vision-bridge
-```
+当前页面的粘贴/拖放处理函数误把事件类型字符串当作事件对象，因此浏览器上传流程可能无法提交图片。修复前请使用明确文件路径或剪贴板脚本。这个助手是可选组件，OCR 和检测不依赖它。
 
-### DeepSeek Harness（dsh）
+## 限制、隐私与排查
 
-`dsh` 会自动扫描 `~/.agents/skills/` 与 `~/.dsh/skills/`（热刷新，无需重启）：
+- Apple Vision OCR、条码、人脸、场景分类及剪贴板功能依赖 macOS。Linux/Windows 尚无完整支持；Pillow/Tesseract 回退流程不能提供全部能力。
+- OCR 归一化使用图片第一帧。Pillow 流程转为 RGB，并将宽度限制到 4,096 像素；`sips` 回退没有同样的缩放逻辑。具体格式支持取决于解码器。
+- 只有 Vision 出错时才尝试英文 Tesseract；Vision 成功但未检出文字，或文字不准确时，不会触发第二轮识别。
+- 出现 `No module named PIL` 时，应在脚本使用的 Python 环境中安装 Pillow；系统缺少 Vision 能力或图片格式不受支持，也可能导致处理失败。
+- 本地命令不发送模型请求。但代理读取提取结果后，这些文字会进入代理对话，适用对应服务的数据处理方式。
+- 不识别真实人物身份，不联网寻找人物身份，不绕过服务限制。OCR 与模型描述应保留不确定性。
 
-> 如果你的目标是在选择 DeepSeek 时直接发送聊天图片，请安装 [`dsh-image-router`](https://github.com/1m01m0/dsh-image-router)，无需为了这条自动工作流安装本 Skill。只有需要显式本地 OCR、扫码、图片信息或备用上传入口时，才在 dsh 中安装本 Skill。
+## 开发与反馈
 
-```sh
-git clone https://github.com/1m01m0/image-vision-bridge ~/.agents/skills/image-vision-bridge
-```
+实现入口见 [SKILL.md](SKILL.md)、[scripts](scripts) 和 [引擎说明](references/engine-notes.md)。仓库没有自动化测试套件。修改后应用非敏感测试图片验证 OCR、条码、不支持的格式和缺失依赖；没有明确请求时，不读取剪贴板或调用远程 API。
 
-## 可选：视觉 API 配置
+[反馈问题](https://github.com/1m01m0/image-vision-bridge/issues) 时请提供 macOS/Python 版本、命令和脱敏错误；只分享有权公开的图片，不附带密钥。
 
-本地引擎免费且完全在本机运行。需要语义级理解（照片、复杂图表）时，配置任意 OpenAI 兼容的视觉模型：
+## 许可证
 
-```sh
-# ~/.dsh/vision.env（权限 600）
-DSH_VISION_API_KEY=sk-你的密钥
-DSH_VISION_API_BASE=https://open.bigmodel.cn/api/paas/v4   # 智谱 GLM（glm-4v-flash 免费）
-DSH_VISION_MODEL=glm-4v-flash
-```
-
-可用供应商：智谱 GLM（免费额度）、阿里百炼 Qwen、硅基流动 DeepSeek-VL2、Moonshot、OpenAI、OpenRouter——详见 `references/engine-notes.md`。
-
-## 隐私
-
-- 本地引擎（OCR/检测/分类/颜色）全部在本机运行，不上传任何数据。
-- 读取剪贴板或本地上传页只能在用户明确要求时进行。
-- 调用视觉 API 时图片会发送给第三方；每次发送前都应说明目标服务并取得同意。
-- 本 Skill 不应主动扫描目录寻找图片，也不应把其他本地文件当作当前附件。
-
-## License
-
-[MIT](LICENSE)
+[MIT](LICENSE)，Copyright © 2026 1m01m0。
