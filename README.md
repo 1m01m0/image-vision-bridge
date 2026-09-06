@@ -9,6 +9,41 @@ DeepSeek and most text-only models cannot ingest images directly. This skill bri
 1. **Local engines (default — free, private, zero-dependency)** — macOS Vision multilingual OCR, QR/barcode decoding, face detection, scene classification, dominant colors, and metadata extraction. Nothing leaves your machine.
 2. **Third-party multimodal models (optional, on demand)** — an OpenAI-compatible vision API (GLM-4V, Qwen-VL, GPT-4o, DeepSeek-VL2, ...) for real semantic understanding of photos, complex diagrams, and sketches.
 
+## Install
+
+### Claude Code / Codex / OpenCode (Agent Skills)
+
+```sh
+# Option 1 (recommended): npx skills
+npx skills add 1m01m0/image-vision-bridge
+
+# Option 2: manual
+git clone https://github.com/1m01m0/image-vision-bridge ~/.claude/skills/image-vision-bridge
+```
+
+### DeepSeek Harness (dsh)
+
+`dsh` auto-discovers skills under `~/.agents/skills/` and `~/.dsh/skills/` (hot-reloaded, no restart needed):
+
+> If your goal is to attach images in chat while using DeepSeek, install [`dsh-image-router`](https://github.com/1m01m0/dsh-image-router); this skill is not required for that automatic workflow. Install this skill in dsh only when you need explicit local OCR, code decoding, image information, or a manual upload fallback.
+
+```sh
+git clone https://github.com/1m01m0/image-vision-bridge ~/.agents/skills/image-vision-bridge
+```
+
+## Optional: vision API configuration
+
+Local engines are free and fully on-device. For semantic-level understanding (photos, complex diagrams), configure any OpenAI-compatible vision model:
+
+```sh
+# ~/.dsh/vision.env (chmod 600)
+DSH_VISION_API_KEY=sk-your-key
+DSH_VISION_API_BASE=https://open.bigmodel.cn/api/paas/v4   # Zhipu GLM (glm-4v-flash is free)
+DSH_VISION_MODEL=glm-4v-flash
+```
+
+Providers: Zhipu GLM (free tier), Alibaba Qwen, SiliconFlow DeepSeek-VL2, Moonshot, OpenAI, OpenRouter — see `references/engine-notes.md` for details.
+
 ## Scope and use cases
 
 This is an **Agent Skill and explicit image toolbox**. It is intended for a user-confirmed image source and a specific processing task; it is not the chat-attachment routing plugin for DeepSeek Harness.
@@ -52,41 +87,6 @@ image-vision-bridge/
 └── references/
     └── engine-notes.md    # Engine details, providers, troubleshooting
 ```
-
-## Install
-
-### Claude Code / Codex / OpenCode (Agent Skills)
-
-```sh
-# Option 1 (recommended): npx skills
-npx skills add 1m01m0/image-vision-bridge
-
-# Option 2: manual
-git clone https://github.com/1m01m0/image-vision-bridge ~/.claude/skills/image-vision-bridge
-```
-
-### DeepSeek Harness (dsh)
-
-`dsh` auto-discovers skills under `~/.agents/skills/` and `~/.dsh/skills/` (hot-reloaded, no restart needed):
-
-> If your goal is to attach images in chat while using DeepSeek, install [`dsh-image-router`](https://github.com/1m01m0/dsh-image-router); this skill is not required for that automatic workflow. Install this skill in dsh only when you need explicit local OCR, code decoding, image information, or a manual upload fallback.
-
-```sh
-git clone https://github.com/1m01m0/image-vision-bridge ~/.agents/skills/image-vision-bridge
-```
-
-## Optional: vision API configuration
-
-Local engines are free and fully on-device. For semantic-level understanding (photos, complex diagrams), configure any OpenAI-compatible vision model:
-
-```sh
-# ~/.dsh/vision.env (chmod 600)
-DSH_VISION_API_KEY=sk-your-key
-DSH_VISION_API_BASE=https://open.bigmodel.cn/api/paas/v4   # Zhipu GLM (glm-4v-flash is free)
-DSH_VISION_MODEL=glm-4v-flash
-```
-
-Providers: Zhipu GLM (free tier), Alibaba Qwen, SiliconFlow DeepSeek-VL2, Moonshot, OpenAI, OpenRouter — see `references/engine-notes.md` for details.
 
 ## Privacy
 
